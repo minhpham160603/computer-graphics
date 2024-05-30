@@ -8,6 +8,9 @@
 #include <string>
 #include <iostream>
 #include <queue>
+#include <random>
+#include <omp.h>
+#include <chrono>
 
 using namespace std;
 
@@ -210,18 +213,26 @@ Polygon VoronoiPolygon(vector<Vector> &pointSet, int index)
     Polygon subjectPolygon = Polygon(boundVertices);
     Polygon outPolygon;
 
-    auto maxDistComp = [pointSet, index](Vector a, Vector b)
-    {
-        return (a - pointSet[index]).norm2() > (b - pointSet[index]).norm2();
-    };
-
     for (int i = 0; i < pointSet.size(); i++)
     {
         if (i == index)
         {
             continue;
         }
+        double maxDist = 0;
 
+        for(auto p: subjectPolygon.vertices){
+            double d = (p - pointSet[index]).norm();
+            if(d > maxDist){
+                maxDist = d;
+            }
+        }
+
+        if((pointSet[i] - pointSet[index]).norm() > 2 * maxDist){
+            // cout << "Too far\n"; 
+            continue;
+        }
+ 
         outPolygon = Polygon();
         Vector M = (pointSet[i] + pointSet[index]) / 2.;
         Line clipEdge = Line(M, pointSet[i] - pointSet[index]);
@@ -237,7 +248,7 @@ Polygon VoronoiPolygon(vector<Vector> &pointSet, int index)
                 {
                     outPolygon.vertices.push_back(intersection);
                 }
-                outPolygon.vertices.push_back(curVertex);
+                outPolygon.vertices.push_back(curVertex);          
             }
             else if (dot(prevVertex - clipEdge.u, clipEdge.N) < 0)
             {
@@ -251,42 +262,34 @@ Polygon VoronoiPolygon(vector<Vector> &pointSet, int index)
 
 int main()
 {
-    vector<Vector> sPol_vertices = {
-        Vector(60. / 200, 20. / 200, 0),
-        Vector(120. / 200, 30. / 200, 0),
-        Vector(140. / 200, 80. / 200, 0),
-        Vector(110. / 200, 150. / 200, 0),
-        Vector(50. / 200, 130. / 200, 0),
-        Vector(30. / 200, 60. / 200, 0),
-        Vector(70. / 200, 100. / 200, 0)};
-    // vector<Vector> sPol_vertices = {
-    //     Vector(100. / 200, 190. / 200, 0),
-    //     Vector(120. / 200, 130. / 200, 0),
-    //     Vector(180. / 200, 130. / 200, 0),
-    //     Vector(140. / 200, 90. / 200, 0),
-    //     Vector(160. / 200, 30. / 200, 0),
-    //     Vector(100. / 200, 70. / 200, 0),
-    //     Vector(40. / 200, 30. / 200, 0),
-    //     Vector(60. / 200, 90. / 200, 0),
-    //     Vector(20. / 200, 130. / 200, 0),
-    //     Vector(80. / 200, 130. / 200, 0)};
+    auto start = std::chrono::high_resolution_clock::now();
+    int size = 1000;
+    std::vector<Vector> points;
+    points.reserve(size);  // Reserve space for 500 points
 
-    vector<Vector> clipPol_vertices = {
-        Vector(40. / 200, 40. / 200, 0),
-        Vector(140. / 200, 40. / 200, 0),
-        Vector(140. / 200, 140. / 200, 0),
-        Vector(40. / 200, 140. / 200, 0)};
+    // Random number generation
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0.0, 1.0);
 
-    Polygon subject = Polygon(sPol_vertices);
-    // Polygon clip = Polygon(clipPol_vertices);
-    // save_svg({subject, clip}, "test.svg");
-    // Polygon outPolygon = polygonClip(subject, clip);
+    // Generate 500 random points
+    for (int i = 0; i < size; ++i) {
+        double x = dis(gen);
+        double y = dis(gen);
+        points.emplace_back(x, y);
+    }
 
-    vector<Polygon> voronoi;
-    for (int i = 0; i < sPol_vertices.size(); i++)
+    vector<Polygon> voronoi(points.size());
+#pragma omp parallel for
+    for (int i = 0; i < points.size(); i++)
     {
-        voronoi.push_back(VoronoiPolygon(sPol_vertices, i));
+        voronoi[i] = (VoronoiPolygon(points, i));
     }
     // save_svg({subject, clip}, "test.svg");
-    save_svg_w_points(voronoi, sPol_vertices, "voronoi.svg");
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Elapsed time: " << elapsed.count() << " seconds\n";
+    
+    save_svg_w_points(voronoi, points, "voronoi.svg");
 }
