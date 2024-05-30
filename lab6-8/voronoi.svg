@@ -1,0 +1,30 @@
+<svg xmlns = "http://www.w3.org/2000/svg" width = "1000" height = "1000">
+<g>
+<polygon points = "353.571, 703.571 422.872, 712.234 470.833, 1000.000 0.000, 1000.000 0.000, 968.750 " fill = "none" stroke = "black"/>
+</g>
+<g>
+<polygon points = "470.833, 1000.000 422.872, 712.234 492.949, 662.179 1000.000, 865.000 1000.000, 1000.000 " fill = "none" stroke = "black"/>
+</g>
+<g>
+<polygon points = "492.949, 662.179 551.744, 456.395 1000.000, 264.286 1000.000, 865.000 " fill = "none" stroke = "black"/>
+</g>
+<g>
+<polygon points = "551.744, 456.395 415.909, 347.727 300.000, 0.000 1000.000, 0.000 1000.000, 264.286 " fill = "none" stroke = "black"/>
+</g>
+<g>
+<polygon points = "415.909, 347.727 165.000, 515.000 0.000, 467.857 0.000, 0.000 300.000, 0.000 " fill = "none" stroke = "black"/>
+</g>
+<g>
+<polygon points = "165.000, 515.000 353.571, 703.571 0.000, 968.750 0.000, 467.857 " fill = "none" stroke = "black"/>
+</g>
+<g>
+<polygon points = "165.000, 515.000 415.909, 347.727 551.744, 456.395 492.949, 662.179 422.872, 712.234 353.571, 703.571 " fill = "none" stroke = "black"/>
+</g>
+<circle cx = "300.000" cy = "900.000" r = "5" fill = "red" />
+<circle cx = "600.000" cy = "850.000" r = "5" fill = "red" />
+<circle cx = "700.000" cy = "600.000" r = "5" fill = "red" />
+<circle cx = "550.000" cy = "250.000" r = "5" fill = "red" />
+<circle cx = "250.000" cy = "350.000" r = "5" fill = "red" />
+<circle cx = "150.000" cy = "700.000" r = "5" fill = "red" />
+<circle cx = "350.000" cy = "500.000" r = "5" fill = "red" />
+</svg>
