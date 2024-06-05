@@ -333,6 +333,22 @@ Polygon VoronoiPolygon(vector<Vector> &pointSet, vector<double> &weights, int in
     return outPolygon;
 }
 
+Polygon constructDisk(Vector center, double R, int n_sample = 100)
+{
+    double d_angle = 2 * M_PI / (double)n_sample;
+    double angle = M_PI;
+    Polygon outPolygon;
+    for (int i = 0; i < n_sample; i++)
+    {
+        double x, y;
+        x = center[0] + R * cos(angle);
+        y = center[1] + R * sin(angle);
+        angle += d_angle;
+        outPolygon.vertices.push_back(Vector(x, y, 0));
+    }
+    return outPolygon;
+}
+
 class objective_function
 {
 protected:
@@ -414,20 +430,23 @@ protected:
         lbfgsfloatval_t fx = 0.0;
 
         vector<double> lambdas(n);
+        vector<Polygon> polygons(n);
         double sum_lambdas = 0;
         for (int i = 0; i < n; i += 1)
         {
             lambdas[i] = lambda(points[i]);
             sum_lambdas += lambdas[i];
+            Polygon Pow = VoronoiPolygon(points, weights, i);
+            double R = sqrt(weights[i] - weights[n - 1]);
+            polygons[i] = Pow;
         }
 
         for (int i = 0; i < n; i += 1)
         {
-            Polygon Pow = VoronoiPolygon(points, weights, i);
-            // Pow.print();
-            g[i] = Pow.area() - (lambdas[i] / sum_lambdas);
-            // cout << Pow.integrate(points[i]) << " " << Pow.area() << " " << sum_lambdas << endl;
-            fx += Pow.integrate(points[i]) - weights[i] * Pow.area() + (lambdas[i] / sum_lambdas) * weights[i];
+            // Pow.print()
+            g[i] = polygons[i].area() - (lambdas[i] / sum_lambdas);
+            // cout << polygons[i].integrate(points[i]) << " " << polygons[i].area() << " " << sum_lambdas << endl;
+            fx += polygons[i].integrate(points[i]) - weights[i] * polygons[i].area() + (lambdas[i] / sum_lambdas) * weights[i];
         }
         return -fx;
     }
@@ -466,7 +485,7 @@ protected:
     }
 };
 
-#define N 500
+#define N 100
 
 int main()
 {
@@ -507,5 +526,5 @@ int main()
     std::chrono::duration<double> elapsed = end - start;
     std::cout << "Elapsed time: " << elapsed.count() << " seconds\n";
 
-    save_svg_w_points(voronoi, points, "power_diagram.svg");
+    save_svg_w_points(voronoi, points, "disk.svg");
 }
