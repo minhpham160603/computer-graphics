@@ -12,8 +12,14 @@
 #include <omp.h>
 #include <chrono>
 #include "lbfgs.h"
+#include <sstream>
 
 using namespace std;
+
+#define N_POINTS 50
+#define FLUID 0.2
+
+#define PRINT_VEC(v) (printf("%s: (%f %f %f)\n", #v, (v)[0], (v)[1], (v)[2]))
 
 class Polygon
 {
@@ -84,6 +90,16 @@ public:
             }
         }
         return sum / 6.;
+    }
+
+    Vector centroid()
+    {
+        Vector c;
+        for (auto v : vertices)
+        {
+            c = c + v;
+        }
+        return c / (double)vertices.size();
     }
 };
 
@@ -287,6 +303,22 @@ Polygon polygonClip(Polygon subjectPolygon, Polygon clipPolygon)
     return outPolygon;
 }
 
+Polygon constructDisk(Vector center, double R, int n_sample = 80)
+{
+    double d_angle = 2. * M_PI / (double)n_sample;
+    double angle = M_PI;
+    Polygon outPolygon;
+    for (int i = 0; i < n_sample; i++)
+    {
+        double x, y;
+        x = center[0] + R * cos(angle);
+        y = center[1] + R * sin(angle);
+        angle += d_angle;
+        outPolygon.vertices.push_back(Vector(x, y, 0));
+    }
+    return outPolygon;
+}
+
 Polygon VoronoiPolygon(vector<Vector> &pointSet, vector<double> &weights, int index)
 {
     vector<Vector> boundVertices = {Vector(0, 0, 0),
@@ -295,6 +327,7 @@ Polygon VoronoiPolygon(vector<Vector> &pointSet, vector<double> &weights, int in
                                     Vector(1, 0, 0)};
     Polygon subjectPolygon = Polygon(boundVertices);
     Polygon outPolygon;
+    int n = weights.size();
 
     for (int i = 0; i < pointSet.size(); i++)
     {
@@ -329,22 +362,6 @@ Polygon VoronoiPolygon(vector<Vector> &pointSet, vector<double> &weights, int in
             }
         }
         subjectPolygon = outPolygon;
-    }
-    return outPolygon;
-}
-
-Polygon constructDisk(Vector center, double R, int n_sample = 100)
-{
-    double d_angle = 2 * M_PI / (double)n_sample;
-    double angle = M_PI;
-    Polygon outPolygon;
-    for (int i = 0; i < n_sample; i++)
-    {
-        double x, y;
-        x = center[0] + R * cos(angle);
-        y = center[1] + R * sin(angle);
-        angle += d_angle;
-        outPolygon.vertices.push_back(Vector(x, y, 0));
     }
     return outPolygon;
 }
@@ -390,12 +407,13 @@ public:
         /* Initialize the variables. */
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_real_distribution<> dis(0.0, 0.1);
+        std::uniform_real_distribution<> dis(0.8, 1.);
         weights.reserve(N);
         for (int i = 0; i < N; ++i)
         {
-            weights[i] = 1;
+            weights[i] = dis(gen);
         }
+        weights[N - 1] = 0.6;
 
         /*
             Start the L-BFGS optimization; this will invoke the callback functions
@@ -429,25 +447,31 @@ protected:
     {
         lbfgsfloatval_t fx = 0.0;
 
-        vector<double> lambdas(n);
-        vector<Polygon> polygons(n);
+        int n_fluid = n - 1;
+
+        vector<double> lambdas(n_fluid);
+        vector<Polygon> polygons(n_fluid);
         double sum_lambdas = 0;
-        for (int i = 0; i < n; i += 1)
+        double estimated_vfluid = 0;
+        for (int i = 0; i < n_fluid; i += 1)
         {
             lambdas[i] = lambda(points[i]);
             sum_lambdas += lambdas[i];
             Polygon Pow = VoronoiPolygon(points, weights, i);
             double R = sqrt(weights[i] - weights[n - 1]);
-            polygons[i] = Pow;
+            polygons[i] = polygonClip(Pow, constructDisk(points[i], R, 200));
+            estimated_vfluid += polygons[i].area();
         }
 
-        for (int i = 0; i < n; i += 1)
+        for (int i = 0; i < n_fluid; i += 1)
         {
             // Pow.print()
-            g[i] = polygons[i].area() - (lambdas[i] / sum_lambdas);
+            g[i] = polygons[i].area() - FLUID / n_fluid;
             // cout << polygons[i].integrate(points[i]) << " " << polygons[i].area() << " " << sum_lambdas << endl;
-            fx += polygons[i].integrate(points[i]) - weights[i] * polygons[i].area() + (lambdas[i] / sum_lambdas) * weights[i];
+            fx += polygons[i].integrate(points[i]) - weights[i] * polygons[i].area() + (FLUID / n_fluid) * weights[i];
         }
+        g[n - 1] = (1 - estimated_vfluid) - (1 - FLUID);
+        fx += weights[n - 1] * ((1 - FLUID) - (1 - estimated_vfluid));
         return -fx;
     }
 
@@ -485,46 +509,150 @@ protected:
     }
 };
 
-#define N 100
+int sgn(double d)
+{
+    if (d == 0)
+        return 0;
+    if (d < 0)
+        return -1;
+    return 1;
+}
+
+void save_frame(const std::vector<Polygon> &cells, std::string filename, int frameid = 0)
+{
+    int W = 500, H = 500;
+    std::vector<unsigned char> image(W * H * 3, 255);
+#pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < cells.size(); i++)
+    {
+
+        double bminx = 1E9, bminy = 1E9, bmaxx = -1E9, bmaxy = -1E9;
+        for (int j = 0; j < cells[i].vertices.size(); j++)
+        {
+            bminx = std::min(bminx, cells[i].vertices[j][0]);
+            bminy = std::min(bminy, cells[i].vertices[j][1]);
+            bmaxx = std::max(bmaxx, cells[i].vertices[j][0]);
+            bmaxy = std::max(bmaxy, cells[i].vertices[j][1]);
+        }
+        bminx = std::min(W - 1., std::max(0., W * bminx));
+        bminy = std::min(H - 1., std::max(0., H * bminy));
+        bmaxx = std::max(W - 1., std::max(0., W * bmaxx));
+        bmaxy = std::max(H - 1., std::max(0., H * bmaxy));
+
+        for (int y = bminy; y < bmaxy; y++)
+        {
+            for (int x = bminx; x < bmaxx; x++)
+            {
+                int prevSign = 0;
+                bool isInside = true;
+                double mindistEdge = 1E9;
+                for (int j = 0; j < cells[i].vertices.size(); j++)
+                {
+                    double x0 = cells[i].vertices[j][0] * W;
+                    double y0 = cells[i].vertices[j][1] * H;
+                    double x1 = cells[i].vertices[(j + 1) % cells[i].vertices.size()][0] * W;
+                    double y1 = cells[i].vertices[(j + 1) % cells[i].vertices.size()][1] * H;
+                    double det = (x - x0) * (y1 - y0) - (y - y0) * (x1 - x0);
+                    int sign = sgn(det);
+                    if (prevSign == 0)
+                        prevSign = sign;
+                    else if (sign == 0)
+                        sign = prevSign;
+                    else if (sign != prevSign)
+                    {
+                        isInside = false;
+                        break;
+                    }
+                    prevSign = sign;
+                    double edgeLen = sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+                    double distEdge = std::abs(det) / edgeLen;
+                    double dotp = (x - x0) * (x1 - x0) + (y - y0) * (y1 - y0);
+                    if (dotp < 0 || dotp > edgeLen * edgeLen)
+                        distEdge = 1E9;
+                    mindistEdge = std::min(mindistEdge, distEdge);
+                }
+                if (isInside)
+                {
+                    if (i < N_POINTS)
+                    { // the N first particles may represent fluid, displayed in blue
+                        image[((H - y - 1) * W + x) * 3] = 0;
+                        image[((H - y - 1) * W + x) * 3 + 1] = 0;
+                        image[((H - y - 1) * W + x) * 3 + 2] = 255;
+                    }
+                    if (mindistEdge <= 2)
+                    {
+                        image[((H - y - 1) * W + x) * 3] = 0;
+                        image[((H - y - 1) * W + x) * 3 + 1] = 0;
+                        image[((H - y - 1) * W + x) * 3 + 2] = 0;
+                    }
+                }
+            }
+        }
+    }
+    std::ostringstream os;
+    os << filename << frameid << ".png";
+    stbi_write_png(os.str().c_str(), W, H, 3, &image[0], 0);
+}
+
+void GMScheme(vector<Vector> &points, vector<Vector> &v, double mass, int max_num_frames = 50)
+{
+    for (int i = 0; i < max_num_frames; i++)
+    {
+        objective_function obj(points);
+        obj.run(N_POINTS + 1);
+        double eps = 0.004;
+        double dt = 0.008;
+        Vector g = Vector(0, -9.8, 0);
+
+        vector<Polygon> voronoi(points.size());
+        double sum_area = 0;
+        vector<Vector> new_points(N_POINTS);
+
+        for (int i = 0; i < points.size(); i++)
+        {
+            voronoi[i] = VoronoiPolygon(points, obj.weights, i);
+            double R = sqrt(obj.weights[i] - obj.weights[N_POINTS]);
+            voronoi[i] = polygonClip(voronoi[i], constructDisk(points[i], R));
+
+            Vector F_spring = (voronoi[i].centroid() - points[i]) / (eps * eps);
+            // PRINT_VEC(F_spring);
+            Vector F = F_spring + mass * g;
+            v[i] = v[i] + F * dt / mass;
+            new_points[i] = points[i] + v[i] * dt;
+        }
+
+        points = new_points;
+
+        // printf("Frame %d done!\n", i);
+
+        save_svg_animated(voronoi, "./fluid.svg", i, max_num_frames);
+    }
+}
 
 int main()
 {
     auto start = std::chrono::high_resolution_clock::now();
     std::vector<Vector> points;
-    std::vector<double> weights;
-    points.reserve(N); // Reserve space for 500 points
-    weights.reserve(N);
+    std::vector<Vector> vs;
+    points.reserve(N_POINTS); // Reserve space for 500 points
+    vs.reserve(N_POINTS);
     // Random number generation
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(0.0, 1.0);
 
     // Generate 500 random points
-    for (int i = 0; i < N; ++i)
+    for (int i = 0; i < N_POINTS; ++i)
     {
         double x = dis(gen);
         double y = dis(gen);
         points.emplace_back(x, y);
-        weights.emplace_back(dis(gen));
+        vs.emplace_back(Vector(0, 0, 0));
     }
 
-    objective_function obj(points);
-    obj.run(N);
-
-    vector<Polygon> voronoi(points.size());
-    double sum_area = 0;
-    for (int i = 0; i < points.size(); i++)
-    {
-        voronoi[i] = (VoronoiPolygon(points, obj.weights, i));
-        sum_area += voronoi[i].area();
-    }
-
-    cout << "area " << sum_area << endl;
-    // save_svg({subject, clip}, "test.svg");
+    GMScheme(points, vs, 200, 200);
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     std::cout << "Elapsed time: " << elapsed.count() << " seconds\n";
-
-    save_svg_w_points(voronoi, points, "disk.svg");
 }
