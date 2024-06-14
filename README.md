@@ -2,7 +2,7 @@
 
 ## Minh Pham
 
-### Lecture 6: Geometry Processing - Clipping and Voronoi Diagrams
+### Lab 6: Geometry Processing - Clipping and Voronoi Diagrams
 
 #### Key Implementations
 
@@ -25,7 +25,7 @@
   - **Performance:**
     - 1000 points Voronoi Diagram takes 0.023 seconds to complete with OpenMP and 0.15 seconds without OpenMP.
 
-### Lecture 7: Geometry Processing - Semi-Discrete Optimal Transport in 2D
+### Lab 7: Geometry Processing - Semi-Discrete Optimal Transport in 2D
 
 #### Key Implementations
 
@@ -50,7 +50,7 @@
     - 100 points take 0.61 seconds to render with OpenMP and O3 compiling flag.
     - 500 points take 19.16 seconds.
 
-### Lab 8 Report: Optimizing Voronoi Diagram for Fluid Simulation
+### Lab 8: Optimizing Voronoi Diagram for Fluid Simulation
 
 #### Key Implementations
 
