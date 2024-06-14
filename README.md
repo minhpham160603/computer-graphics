@@ -72,7 +72,3 @@
   - **Example:**
 <img src="/lab6-8/fluid.svg" alt="Test Polygon Clip Algorithm Input" style="margin-right: 10px; width=30px;height=auto">
 
-  
----
-
-For more details and to see the animated SVG of the fluid simulation, visit [my repository](link_to_repository).
